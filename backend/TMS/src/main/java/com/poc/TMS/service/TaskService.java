@@ -1,0 +1,151 @@
+package com.poc.TMS.service;
+
+import com.poc.TMS.DTO.CreateTaskDTO;
+import com.poc.TMS.DTO.TaskDTO;
+import com.poc.TMS.DTO.UpdateTaskDTO;
+import com.poc.TMS.DTO.UserListDTO;
+import com.poc.TMS.entity.Task;
+import com.poc.TMS.entity.User;
+import com.poc.TMS.repository.TaskRepository;
+import com.poc.TMS.repository.UserRepository;
+import com.poc.TMS.DTO.ResponseDTO;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+public class TaskService {
+        @Autowired
+        UserRepository userRepository;
+
+        @Autowired
+        TaskRepository taskRepository;
+
+        public ResponseEntity<ResponseDTO> createTaskService(CreateTaskDTO createTaskDTO){
+            ResponseDTO response=new ResponseDTO();
+            System.out.println(createTaskDTO.getAssignedUser());
+            System.out.println(createTaskDTO.getCreatedBy());
+            Optional<User> user1=userRepository.findById(createTaskDTO.getCreatedBy());
+            Task task=new Task();
+            task.setTitle(createTaskDTO.getTitle());
+            task.setDescription(createTaskDTO.getDescription());
+            task.setDueDate(createTaskDTO.getDueDate());
+            task.setStatus(createTaskDTO.getStatus());
+            if(createTaskDTO.getAssignedUser()!=null){
+                Optional<User> user=userRepository.findById(createTaskDTO.getAssignedUser());
+                task.setUser(user.get());
+            }else{
+                task.setUser(null);
+            }
+            task.setCreatedDate(LocalDate.now());
+            task.setCreatedBy(user1.get());
+            taskRepository.save(task);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
+
+//          public List<TaskDTO> getAllTasks(String userId) {
+//            Optional<User> user=userRepository.findById(Integer.valueOf(userId));
+//            if(user.get().getRole().equals("ADMIN")){
+//                return taskRepository.findAllTasks(userId);
+//            }
+//            return taskRepository.findAllUserTasks(userId);
+//    }
+
+    public Page<TaskDTO> getAllTasks(String userId, String sortBy, String sortOrder, int page, int size) {
+        Sort sort = sortOrder.equalsIgnoreCase("desc") ?
+                Sort.by(sortBy).descending() :
+                Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+        Optional<User> user=userRepository.findById(Integer.valueOf(userId));
+        if(user.get().getRole().equals("ADMIN")){
+            return taskRepository.findAllTasks(userId,pageable);
+        }
+        return taskRepository.findAllUserTasks(userId,pageable);
+
+//        return taskRepository.getPageTasks(userId, pageable);
+    }
+
+//    public List<TaskDTO> getUserCreatedTasks(String userId) {
+//        return taskRepository.getUserCreatedTasks(userId);
+//    }
+    public Page<TaskDTO> getUserCreatedTasks(String userId,String sortBy, String sortOrder, int page, int size) {
+        Sort sort = sortOrder.equalsIgnoreCase("desc") ?
+                Sort.by(sortBy).descending() :
+                Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        return taskRepository.getUserCreatedTasks(userId, pageable);
+    }
+
+    public Page<TaskDTO> getUserCompletedTasks(String userId,String sortBy, String sortOrder, int page, int size) {
+        Sort sort = sortOrder.equalsIgnoreCase("desc") ?
+                Sort.by(sortBy).descending() :
+                Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        return taskRepository.getUserCompletedTasks(userId,pageable);
+    }
+
+    public ResponseEntity<ResponseDTO> deleteTaskService(Integer taskId) {
+        ResponseDTO responseDTO =new ResponseDTO();
+//        Optional<User> user=userRepository.findById(userId);
+//        if(user.get().getRole().equals("ADMIN")){
+//
+//        }
+        responseDTO.setStatusCode("200");
+        responseDTO.setStatusMsg("Task deleted successfully");
+
+        taskRepository.deleteById(taskId);
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
+    }
+
+    public ResponseEntity<ResponseDTO> updateTaskService(UpdateTaskDTO updateTaskDTO) {
+        System.out.println(updateTaskDTO);
+        ResponseDTO responseDTO =new ResponseDTO();
+        responseDTO.setStatusCode("200");
+        responseDTO.setStatusMsg("Updated successfully");
+        Optional<Task> task=taskRepository.findById(updateTaskDTO.getTaskId());
+
+        Optional<User> user1=userRepository.findById(updateTaskDTO.getLoggedInUserId());
+        if(task==null){
+            responseDTO.setStatusCode("404");
+            responseDTO.setStatusMsg("Not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(responseDTO);
+        }
+        task.get().setStatus(updateTaskDTO.getStatus());
+        task.get().setTitle(updateTaskDTO.getTitle());
+        task.get().setDescription(updateTaskDTO.getDescription());
+        task.get().setDueDate(updateTaskDTO.getDueDate());
+        if(updateTaskDTO.getUserId()!=null){
+            Optional<User> user=userRepository.findById(updateTaskDTO.getUserId());
+            if (user1.get().getRole().equals("ADMIN")) {
+                task.get().setUser(user.get());
+            }
+        }
+        else{
+            task.get().setUser(null);
+        }
+        taskRepository.save(task.get());
+    return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
+        }
+
+    public List<UserListDTO> getAllUsers() {
+            return userRepository.getAllUsers();
+    }
+
+
+
+
+}

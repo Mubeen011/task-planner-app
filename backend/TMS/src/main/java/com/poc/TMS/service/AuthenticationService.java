@@ -1,0 +1,99 @@
+package com.poc.TMS.service;
+
+import com.poc.TMS.DTO.LoginDTO;
+import com.poc.TMS.DTO.RegistrationDTO;
+import com.poc.TMS.entity.User;
+import com.poc.TMS.repository.UserRepository;
+import com.poc.TMS.DTO.LoginResponseDTO;
+import com.poc.TMS.DTO.ResponseDTO;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+
+@Service
+public class AuthenticationService {
+
+    @Autowired
+    UserRepository userRepository;
+    @Autowired
+    PasswordEncoder passwordEncoder;
+
+    public ResponseEntity<ResponseDTO> registerUserService(RegistrationDTO registrationDTO) {
+        User user=userRepository.findByEmail(registrationDTO.getEmail());
+        ResponseDTO responseDTO =new ResponseDTO();
+        responseDTO.setStatusMsg("Registration successful");
+        responseDTO.setStatusCode("200");
+        if(user!=null){
+            responseDTO.setStatusCode("409");
+            responseDTO.setStatusMsg("User already exists. Please login with your credentials");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(responseDTO);
+        }
+        else{
+            User newUser=new User();
+            newUser.setEmail(registrationDTO.getEmail());
+            newUser.setPwd(passwordEncoder.encode(registrationDTO.getPassword()));
+            newUser.setFirstName(registrationDTO.getFirstName());
+            newUser.setLastName(registrationDTO.getLastName());
+            newUser.setRole("USER");
+            userRepository.save(newUser);
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
+        }
+    }
+
+
+        @Autowired
+        private AuthenticationManager authenticationManager;
+
+
+
+        public ResponseEntity<LoginResponseDTO> loginService(@RequestBody LoginDTO loginDTO, HttpSession session, HttpServletRequest request, HttpServletResponse response) {
+            try {
+                Authentication authentication = authenticationManager.authenticate(
+                        new UsernamePasswordAuthenticationToken(loginDTO.getEmail(), loginDTO.getPassword())
+                );
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+                HttpSessionSecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
+                securityContextRepository.saveContext(SecurityContextHolder.getContext(), request, response);
+
+                Authentication authentication1 = SecurityContextHolder.getContext().getAuthentication();
+                System.out.println("Roles: " + authentication1.getAuthorities());
+
+                // If authentication is successful, fetch user details
+                User user = userRepository.findByEmail(loginDTO.getEmail());
+
+                LoginResponseDTO loginResponse = new LoginResponseDTO();
+                loginResponse.setStatusCode("200");
+                loginResponse.setStatusMsg("Login successful");
+                loginResponse.setUserId(user.getUserId());
+                loginResponse.setRole(user.getRole());
+                loginResponse.setName(user.getFirstName() + " " + user.getLastName());
+
+                session.setAttribute("userId", user.getUserId());
+                session.setAttribute("role", user.getRole());
+                System.out.println(response);
+                return ResponseEntity.ok(loginResponse);
+
+            } catch (BadCredentialsException ex) {
+                LoginResponseDTO loginResponse = new LoginResponseDTO();
+                loginResponse.setStatusCode("401");
+                loginResponse.setStatusMsg("Invalid credentials");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(loginResponse);
+            }
+        }
+    }
+
+
+
